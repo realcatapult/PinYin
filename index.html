@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pinyin Desk — read Chinese, keep the words</title>
 <meta name="description" content="Paste Chinese text and read it with pinyin or zhùyīn above every word. Hide the readings to test yourself, tap any word for its meaning, and build a spaced-repetition deck as you read. Works offline.">
+<meta name="author" content="Pinyin Desk contributors">
+<meta name="application-name" content="Pinyin Desk">
+<meta name="theme-color" content="#F1EDE3">
+<meta property="og:title" content="Pinyin Desk">
+<meta property="og:description" content="A quiet, offline reading desk for Chinese text, pinyin, zhùyīn and vocabulary review.">
+<meta property="og:type" content="website">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23A02D24'/%3E%3Ctext x='16' y='23' font-size='21' text-anchor='middle' fill='%23FCFAF4' font-family='serif'%3E%E8%AE%80%3C/text%3E%3C/svg%3E">
 <style>/* ============================================================
@@ -153,8 +159,21 @@ html[data-theme="dark"] .tab .count.due { color: #17140F; }
 
 /* ---------------- shared shell ---------------- */
 
-.shell { max-width: 1320px; margin: 0 auto; padding: 0 20px 96px; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 0 20px 42px; }
 .view[hidden] { display: none; }
+
+.site-footer {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 18px;
+  margin-top: 54px; padding-top: 14px; border-top: 1px solid var(--rule);
+  color: var(--ink-3); font-size: 11.5px;
+}
+.site-footer p { margin: 0; }
+.site-footer a { color: inherit; }
+.footer-mark { color: var(--seal); font-weight: 600; }
+@media (max-width: 620px) {
+  .site-footer { display: block; line-height: 1.7; }
+  .site-footer p + p { margin-top: 4px; }
+}
 
 .pagehead { padding: 30px 0 14px; border-bottom: 2px solid var(--ink); margin-bottom: 4px; }
 .pagehead + .col-rule-thin { margin-bottom: 26px; }
@@ -772,7 +791,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             Definitions from <b>CC-CEDICT</b> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>),
             <span id="dict-size">—</span> entries bundled into this page.
             Word splitting and the commonness bands use the <b>jieba</b> frequency list (MIT).
-            Everything runs in your browser: nothing you paste is sent anywhere, and the page works with no connection.
+            Everything runs in your browser. Site should be able to work offline.
           </p>
         </div>
 
@@ -828,6 +847,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </section>
 
   </main>
+
+  <footer class="site-footer">
+    <p>&copy; 2026 Pinyin Desk contributors. App code and interface are original work.</p>
+    <p><span class="footer-mark">Vibe-coded, deliberately offline.</span> <a href="https://github.com/realcatapult/PinYin" target="_blank" rel="noopener">View source</a></p>
+  </footer>
 </div>
 
 <dialog id="settings">
@@ -880,11 +904,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
 
     <h3>Where your data lives</h3>
-    <p>Your deck, your settings, and the last text you read are stored in this browser only. Nothing is uploaded, and there is no account. Clearing site data will erase your deck, so use <b>Export</b> on the deck page to keep a copy you own.</p>
+    <p>Everything is stored in the browser only. Nothing is uploaded. </p>
 
     <h3>Credits</h3>
     <p>Definitions come from <b>CC-CEDICT</b>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Word segmentation and the commonness bands use the frequency list from the <b>jieba</b> project (MIT). Both are bundled into this file, which is why it works offline.</p>
     <p>Pronunciation uses your device's built-in speech voices, when it has a Chinese one installed.</p>
+
+    <h3>Small print</h3>
+    <p><b>Pinyin Desk v1.0</b> &middot; &copy; 2026 Pinyin Desk contributors. No analytics, accounts, cookies, or server-side text processing. Your deck and reading history stay in this browser unless you export them.</p>
+    <p><a href="https://github.com/realcatapult/PinYin" target="_blank" rel="noopener">Source code on GitHub</a> &middot; Built as a static site for GitHub Pages.</p>
   </div>
 </dialog>
 
