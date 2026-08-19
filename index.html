@@ -364,8 +364,8 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
 @media (hover: hover) { .w[data-i]:hover { background: var(--seal-wash); } }
 .w.saved .hz { box-shadow: inset 0 -2px 0 var(--seal-line); }
 .w.active { background: var(--seal-wash); box-shadow: 0 0 0 1px var(--seal-line); }
-.w.tts-active { background: var(--seal-wash); box-shadow: 0 0 0 1px var(--seal); }
-.w.tts-active .hz { color: var(--seal); }
+.w.tts-active { background: var(--seal-wash); box-shadow: 0 0 0 2px var(--seal); }
+.w.tts-active .hz { color: var(--seal); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .w.unknown .hz { color: var(--ink-2); }
 .punct .ann { visibility: hidden; }
 
@@ -1603,7 +1603,7 @@ function grade(g) {
 let voice = null;
 let ttsOffset = 0;
 let ttsTimer = 0;
-let ttsBoundarySeen = false;
+let ttsRun = 0;
 function pickVoice() {
   if (!window.speechSynthesis) return;
   const vs = speechSynthesis.getVoices();
@@ -1621,6 +1621,7 @@ function say(text) {
   speechSynthesis.cancel();
   passageSpeaking = false;
   ttsOffset = 0;
+  ttsRun++;
   cancelAnimationFrame(ttsTimer);
   clearTtsHighlight();
   updateReadAloudButton();
@@ -1636,22 +1637,26 @@ function clearTtsHighlight() {
 }
 function highlightTtsAt(charIndex) {
   let current = null;
+  let previous = null;
   $$('.w[data-tts-start]').forEach(word => {
     const start = +word.dataset.ttsStart;
     const end = +word.dataset.ttsEnd;
+    if (start <= charIndex) previous = word;
     if (charIndex >= start && charIndex < end) current = word;
   });
+  current = current || previous;
   $$('.w.tts-active').forEach(word => word.classList.toggle('tts-active', word === current));
 }
 function startTtsFallback(text, startOffset) {
-  clearTimeout(ttsTimer);
+  cancelAnimationFrame(ttsTimer);
+  const run = ttsRun;
   const started = performance.now();
   const charsPerSecond = 4.6 * prefs.ttsRate;
   const tick = () => {
-    if (!passageSpeaking || ttsBoundarySeen) return;
+    if (!passageSpeaking || run !== ttsRun) return;
     ttsOffset = Math.min(text.length, startOffset + Math.floor((performance.now() - started) / 1000 * charsPerSecond));
     highlightTtsAt(ttsOffset);
-    if (ttsOffset < text.length) ttsTimer = requestAnimationFrame(tick);
+    ttsTimer = requestAnimationFrame(tick);
   };
   ttsTimer = requestAnimationFrame(tick);
 }
@@ -1668,9 +1673,9 @@ function readPassageAloud() {
   if (!window.speechSynthesis || !S.text.trim()) return;
   if (passageSpeaking) {
     passageSpeaking = false;
+    ttsRun++;
     speechSynthesis.cancel();
     cancelAnimationFrame(ttsTimer);
-    clearTtsHighlight();
     updateReadAloudButton();
     return;
   }
@@ -1681,14 +1686,14 @@ function readPassageAloud() {
   const u = new SpeechSynthesisUtterance(spokenText.slice(startOffset));
   u.lang = 'zh-CN'; u.rate = prefs.ttsRate;
   if (voice) u.voice = voice;
-  ttsBoundarySeen = false;
+  const run = ++ttsRun;
   u.onboundary = e => {
-    ttsBoundarySeen = true;
-    cancelAnimationFrame(ttsTimer);
+    if (run !== ttsRun || !passageSpeaking) return;
     ttsOffset = Math.min(spokenText.length, startOffset + e.charIndex);
     highlightTtsAt(ttsOffset);
   };
   u.onend = u.onerror = () => {
+    if (run !== ttsRun || !passageSpeaking) return;
     passageSpeaking = false;
     ttsOffset = 0;
     cancelAnimationFrame(ttsTimer);
