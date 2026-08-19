@@ -317,6 +317,11 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
   padding: .34em .5px 0;
   transition: background .18s;
 }
+.w {
+  display: inline-grid;
+  justify-items: center;
+  vertical-align: top;
+}
 .ann {
   display: block;
   font-family: var(--sans);
@@ -326,10 +331,11 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
   color: var(--ink-3);
   letter-spacing: .01em;
   white-space: nowrap;
+  width: max-content;
   transition: opacity var(--dur) var(--ease), filter var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .ann.zh { font-family: var(--han); font-size: calc(var(--hz) * .345); letter-spacing: .06em; }
-.hz { display: block; }
+.hz { display: block; width: max-content; }
 
 /* annotation modes */
 .passage[data-ann="off"] .w .ann,
