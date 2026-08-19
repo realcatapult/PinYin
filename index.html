@@ -308,6 +308,10 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
 }
 .passage p { margin: 0 0 .95em; }
 .passage p:last-child { margin-bottom: 0; }
+.passage-tools {
+  display: flex; justify-content: flex-end; margin-top: 18px;
+  padding-top: 12px; border-top: 1px solid var(--rule);
+}
 
 .w, .punct {
   display: inline-block;
@@ -319,6 +323,7 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
 }
 .w {
   display: inline-grid;
+  grid-template-columns: repeat(var(--word-cols), var(--hz));
   justify-items: center;
   vertical-align: top;
 }
@@ -334,6 +339,15 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
   width: max-content;
   transition: opacity var(--dur) var(--ease), filter var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
+.w > .ann,
+.w > .hz {
+  grid-column: 1 / -1;
+  width: auto;
+  display: grid;
+  grid-template-columns: repeat(var(--word-cols), var(--hz));
+}
+.ann-syl,
+.hz-char { justify-self: center; }
 .ann.zh { font-family: var(--han); font-size: calc(var(--hz) * .345); letter-spacing: .06em; }
 .hz { display: block; width: max-content; }
 
@@ -789,6 +803,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <div id="read-view" hidden>
               <div class="passage" id="passage" data-ann="all" data-clickable="1"
                    aria-label="Annotated passage. Use the arrow keys to move between words, Enter to reveal a reading, S to save a word."></div>
+              <div class="passage-tools">
+                <button class="btn btn-quiet" id="read-aloud" data-act="read-aloud" hidden aria-label="Read passage aloud"></button>
+              </div>
             </div>
           </article>
 
@@ -1234,15 +1251,20 @@ function renderPassage() {
     }
     const zh = prefs.read === 'zhuyin' ? ' zh' : '';
     if (tok.k === -1) {
-      parts.push('<span class="w unknown" data-i="' + i + '"><span class="ann' + zh + '" aria-hidden="true">·</span><span class="hz">' + esc(tok.t) + '</span></span>');
+      const unknownChars = Array.from(tok.t);
+      parts.push('<span class="w unknown" data-i="' + i + '" style="--word-cols:' + unknownChars.length + '"><span class="ann' + zh + '" aria-hidden="true"><span class="ann-syl">·</span></span><span class="hz">' + unknownChars.map(ch => '<span class="hz-char">' + esc(ch) + '</span>').join('') + '</span></span>');
       return;
     }
     const r = readingsOf(tok.k);
     const ann = displayReading(r.py[Math.min(tok.r, r.py.length - 1)] || r.py[0]);
+    const readingParts = ann.split(/\s+/).filter(Boolean);
+    const displayedChars = Array.from(displayForm(tok));
+    const wordCols = Math.max(displayedChars.length, readingParts.length);
     const head = D.H[tok.k];
     const cls = 'w' + (deck[head] ? ' saved' : '') + (i === S.active ? ' active' : '');
-    parts.push('<span class="' + cls + '" data-i="' + i + '" tabindex="-1"><span class="ann' + zh + '" aria-hidden="true">' +
-      esc(ann) + '</span><span class="hz">' + esc(displayForm(tok)) + '</span></span>');
+    parts.push('<span class="' + cls + '" data-i="' + i + '" style="--word-cols:' + wordCols + '" tabindex="-1"><span class="ann' + zh + '" aria-hidden="true">' +
+      readingParts.map(part => '<span class="ann-syl">' + esc(part) + '</span>').join('') + '</span><span class="hz">' +
+      displayedChars.map(ch => '<span class="hz-char">' + esc(ch) + '</span>').join('') + '</span></span>');
   });
   parts.push('</p>');
   passageEl.innerHTML = parts.join('').replace(/<p><\/p>/g, '');
@@ -1570,9 +1592,41 @@ if (window.speechSynthesis) { pickVoice(); speechSynthesis.onvoiceschanged = pic
 function say(text) {
   if (!window.speechSynthesis) return;
   speechSynthesis.cancel();
+  passageSpeaking = false;
+  updateReadAloudButton();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'zh-CN'; u.rate = 0.85;
   if (voice) u.voice = voice;
+  speechSynthesis.speak(u);
+}
+
+let passageSpeaking = false;
+function updateReadAloudButton() {
+  const button = $('#read-aloud');
+  if (!button) return;
+  const active = passageSpeaking;
+  button.innerHTML = icon(active ? 'stop' : 'sound') + (active ? 'Stop' : 'Read aloud');
+  button.setAttribute('aria-label', active ? 'Stop reading aloud' : 'Read passage aloud');
+  button.setAttribute('aria-pressed', String(active));
+}
+function readPassageAloud() {
+  if (!window.speechSynthesis || !S.text.trim()) return;
+  if (passageSpeaking) {
+    passageSpeaking = false;
+    speechSynthesis.cancel();
+    updateReadAloudButton();
+    return;
+  }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(S.text);
+  u.lang = 'zh-CN'; u.rate = 0.85;
+  if (voice) u.voice = voice;
+  u.onend = u.onerror = () => {
+    passageSpeaking = false;
+    updateReadAloudButton();
+  };
+  passageSpeaking = true;
+  updateReadAloudButton();
   speechSynthesis.speak(u);
 }
 
@@ -1591,6 +1645,7 @@ const ICONS = {
   book: '<path d="M2.6 3.4h4.3c.9 0 1.6.7 1.6 1.6v8.2c0-.7-.6-1.3-1.3-1.3H2.6z"/><path d="M14.4 3.4h-4.3c-.9 0-1.6.7-1.6 1.6v8.2c0-.7.6-1.3 1.3-1.3h4.6z"/>',
   cards: '<rect x="2.4" y="5.2" width="8.4" height="8.4" rx="1.2"/><path d="M5.6 5.2V3.6a1.2 1.2 0 0 1 1.2-1.2h6.4a1.2 1.2 0 0 1 1.2 1.2v6.4a1.2 1.2 0 0 1-1.2 1.2h-1.6"/>',
   play: '<path d="M5.2 3.4l8 5.1-8 5.1z"/>',
+  stop: '<rect x="4.6" y="4.6" width="7.8" height="7.8" rx=".7"/>',
   x: '<path d="M4 4l9 9M13 4l-9 9"/>',
   down: '<path d="M8.5 2.8v8.4M4.9 7.9l3.6 3.6 3.6-3.6M3 14h11"/>',
   up: '<path d="M8.5 11.6V3.2M4.9 6.5l3.6-3.6 3.6 3.6M3 14h11"/>'
@@ -1725,6 +1780,7 @@ function wire() {
     const act = e.target.closest('[data-act]');
     if (act) {
       const a = act.dataset.act;
+      if (a === 'read-aloud') { readPassageAloud(); return; }
       if (a === 'save') { addCard(S.tokens[S.active]); renderPanel(S.tokens[S.active]); }
       else if (a === 'say') { const t = S.tokens[S.active]; if (t && t.k >= 0) say(D.H[t.k]); }
       else if (a === 'say-card') { const c = deck[S.queue[S.qi]]; if (c) say(c.k); }
@@ -1929,6 +1985,10 @@ async function boot() {
   $('#about-btn').innerHTML = icon('info');
   $('#settings-btn').innerHTML = icon('gear');
   $$('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon) + el.textContent);
+  if (window.speechSynthesis) {
+    $('#read-aloud').hidden = false;
+    updateReadAloudButton();
+  }
   wire();
   renderHotkey();
   refreshCounts();
