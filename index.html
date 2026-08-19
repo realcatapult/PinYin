@@ -159,8 +159,9 @@ html[data-theme="dark"] .tab .count.due { color: #17140F; }
 
 /* ---------------- shared shell ---------------- */
 
-.shell { max-width: 1320px; margin: 0 auto; padding: 0 20px 42px; }
+.shell { position: relative; max-width: 1320px; margin: 0 auto; padding: 0 20px 42px; }
 .view[hidden] { display: none; }
+#app.is-loading { pointer-events: none; }
 
 .site-footer {
   display: flex; justify-content: space-between; align-items: baseline; gap: 18px;
@@ -628,6 +629,7 @@ dialog::backdrop { background: rgba(26, 25, 23, .5); backdrop-filter: blur(2px);
   font-size: 12px; color: var(--ink-3); line-height: 1.6;
 }
 .footnote a { color: var(--ink-2); }
+#dict-size { display: inline-block; min-width: 5.5em; }
 
 @media (max-width: 760px) {
   .masthead-in { gap: 6px; padding: 0 12px; height: 54px; }
@@ -730,9 +732,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 </header>
 
 <div class="shell">
-  <div id="boot" class="boot" style="padding:60px 0"><i></i> Unpacking the dictionary…</div>
+  <div id="boot" class="boot" style="position:absolute; inset:0; z-index:50; padding:60px 0; background:var(--paper)" role="status" aria-live="polite"><i></i> Unpacking the dictionary…</div>
 
-  <main id="app" hidden>
+  <main id="app" class="is-loading" aria-busy="true">
 
     <!-- ============ READ ============ -->
     <section class="view" data-view="read">
@@ -1995,8 +1997,6 @@ async function boot() {
 
   try {
     const n = await loadDict();
-    $('#boot').remove();
-    $('#app').hidden = false;
     $('#dict-payload').remove();
     $('#dict-size').textContent = n.toLocaleString('en-US');
     const saved = store.get(K.text, '');
@@ -2004,6 +2004,9 @@ async function boot() {
     else showPaste();
     $$('.dial').forEach(moveThumb);
     if (!store.ok) toast('Private browsing: your deck will not persist. Use Export to keep it.');
+    $('#boot').remove();
+    $('#app').classList.remove('is-loading');
+    $('#app').removeAttribute('aria-busy');
   } catch (err) {
     $('#boot').innerHTML = '<p style="color:var(--seal)">' + esc(err.message || String(err)) + '</p>';
   }
