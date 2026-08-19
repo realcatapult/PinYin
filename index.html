@@ -161,7 +161,8 @@ html[data-theme="dark"] .tab .count.due { color: #17140F; }
 
 .shell { position: relative; max-width: 1320px; margin: 0 auto; padding: 0 20px 42px; }
 .view[hidden] { display: none; }
-#app.is-loading { pointer-events: none; }
+#app.is-loading { visibility: hidden; pointer-events: none; }
+.shell.is-loading .site-footer { visibility: hidden; }
 
 .site-footer {
   display: flex; justify-content: space-between; align-items: baseline; gap: 18px;
@@ -309,10 +310,6 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
 }
 .passage p { margin: 0 0 .95em; }
 .passage p:last-child { margin-bottom: 0; }
-.passage-tools {
-  display: flex; justify-content: flex-end; margin-top: 18px;
-  padding-top: 12px; border-top: 1px solid var(--rule);
-}
 
 .w, .punct {
   display: inline-block;
@@ -367,6 +364,8 @@ html[data-theme="dark"] .btn-primary { color: #17140F; }
 @media (hover: hover) { .w[data-i]:hover { background: var(--seal-wash); } }
 .w.saved .hz { box-shadow: inset 0 -2px 0 var(--seal-line); }
 .w.active { background: var(--seal-wash); box-shadow: 0 0 0 1px var(--seal-line); }
+.w.tts-active { background: var(--seal-wash); box-shadow: 0 0 0 1px var(--seal); }
+.w.tts-active .hz { color: var(--seal); }
 .w.unknown .hz { color: var(--ink-2); }
 .punct .ann { visibility: hidden; }
 
@@ -630,6 +629,7 @@ dialog::backdrop { background: rgba(26, 25, 23, .5); backdrop-filter: blur(2px);
 }
 .footnote a { color: var(--ink-2); }
 #dict-size { display: inline-block; min-width: 5.5em; }
+#read-aloud[hidden] { display: inline-flex; visibility: hidden; }
 
 @media (max-width: 760px) {
   .masthead-in { gap: 6px; padding: 0 12px; height: 54px; }
@@ -731,7 +731,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   </div>
 </header>
 
-<div class="shell">
+  <div class="shell is-loading">
   <div id="boot" class="boot" style="position:absolute; inset:0; z-index:50; padding:60px 0; background:var(--paper)" role="status" aria-live="polite"><i></i> Unpacking the dictionary…</div>
 
   <main id="app" class="is-loading" aria-busy="true">
@@ -774,6 +774,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <button data-size="2" aria-label="Larger text">+</button>
             </div>
           </div>
+          <button class="btn btn-quiet read-aloud" id="read-aloud" data-act="read-aloud" hidden aria-label="Read passage aloud"></button>
           <button class="btn btn-quiet" id="new-text" style="margin-left:auto">New text</button>
         </div>
       </div>
@@ -805,9 +806,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <div id="read-view" hidden>
               <div class="passage" id="passage" data-ann="all" data-clickable="1"
                    aria-label="Annotated passage. Use the arrow keys to move between words, Enter to reveal a reading, S to save a word."></div>
-              <div class="passage-tools">
-                <button class="btn btn-quiet" id="read-aloud" data-act="read-aloud" hidden aria-label="Read passage aloud"></button>
-              </div>
             </div>
           </article>
 
@@ -1244,17 +1242,21 @@ const passageEl = $('#passage');
 
 function renderPassage() {
   const parts = [];
+  let textOffset = 0;
   parts.push('<p>');
   S.tokens.forEach((tok, i) => {
-    if (tok.br) { parts.push('</p><p>'); return; }
+    if (tok.br) { textOffset++; parts.push('</p><p>'); return; }
     if (tok.k === -2) {
       parts.push('<span class="punct"><span class="ann" aria-hidden="true">·</span><span class="hz">' + esc(tok.t) + '</span></span>');
+      textOffset += tok.t.length;
       return;
     }
     const zh = prefs.read === 'zhuyin' ? ' zh' : '';
     if (tok.k === -1) {
       const unknownChars = Array.from(tok.t);
-      parts.push('<span class="w unknown" data-i="' + i + '" style="--word-cols:' + unknownChars.length + '"><span class="ann' + zh + '" aria-hidden="true"><span class="ann-syl">·</span></span><span class="hz">' + unknownChars.map(ch => '<span class="hz-char">' + esc(ch) + '</span>').join('') + '</span></span>');
+      const start = textOffset;
+      textOffset += tok.t.length;
+      parts.push('<span class="w unknown" data-i="' + i + '" data-tts-start="' + start + '" data-tts-end="' + textOffset + '" style="--word-cols:' + unknownChars.length + '"><span class="ann' + zh + '" aria-hidden="true"><span class="ann-syl">·</span></span><span class="hz">' + unknownChars.map(ch => '<span class="hz-char">' + esc(ch) + '</span>').join('') + '</span></span>');
       return;
     }
     const r = readingsOf(tok.k);
@@ -1262,9 +1264,11 @@ function renderPassage() {
     const readingParts = ann.split(/\s+/).filter(Boolean);
     const displayedChars = Array.from(displayForm(tok));
     const wordCols = Math.max(displayedChars.length, readingParts.length);
+    const start = textOffset;
+    textOffset += tok.t.length;
     const head = D.H[tok.k];
     const cls = 'w' + (deck[head] ? ' saved' : '') + (i === S.active ? ' active' : '');
-    parts.push('<span class="' + cls + '" data-i="' + i + '" style="--word-cols:' + wordCols + '" tabindex="-1"><span class="ann' + zh + '" aria-hidden="true">' +
+    parts.push('<span class="' + cls + '" data-i="' + i + '" data-tts-start="' + start + '" data-tts-end="' + textOffset + '" style="--word-cols:' + wordCols + '" tabindex="-1"><span class="ann' + zh + '" aria-hidden="true">' +
       readingParts.map(part => '<span class="ann-syl">' + esc(part) + '</span>').join('') + '</span><span class="hz">' +
       displayedChars.map(ch => '<span class="hz-char">' + esc(ch) + '</span>').join('') + '</span></span>');
   });
@@ -1595,6 +1599,7 @@ function say(text) {
   if (!window.speechSynthesis) return;
   speechSynthesis.cancel();
   passageSpeaking = false;
+  clearTtsHighlight();
   updateReadAloudButton();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'zh-CN'; u.rate = 0.85;
@@ -1603,6 +1608,18 @@ function say(text) {
 }
 
 let passageSpeaking = false;
+function clearTtsHighlight() {
+  $$('.w.tts-active').forEach(word => word.classList.remove('tts-active'));
+}
+function highlightTtsAt(charIndex) {
+  let current = null;
+  $$('.w[data-tts-start]').forEach(word => {
+    const start = +word.dataset.ttsStart;
+    const end = +word.dataset.ttsEnd;
+    if (charIndex >= start && charIndex < end) current = word;
+  });
+  $$('.w.tts-active').forEach(word => word.classList.toggle('tts-active', word === current));
+}
 function updateReadAloudButton() {
   const button = $('#read-aloud');
   if (!button) return;
@@ -1616,17 +1633,22 @@ function readPassageAloud() {
   if (passageSpeaking) {
     passageSpeaking = false;
     speechSynthesis.cancel();
+    clearTtsHighlight();
     updateReadAloudButton();
     return;
   }
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(S.text);
+  const spokenText = S.text.replace(/\r\n?/g, '\n');
+  const u = new SpeechSynthesisUtterance(spokenText);
   u.lang = 'zh-CN'; u.rate = 0.85;
   if (voice) u.voice = voice;
+  u.onboundary = e => highlightTtsAt(e.charIndex);
   u.onend = u.onerror = () => {
     passageSpeaking = false;
+    clearTtsHighlight();
     updateReadAloudButton();
   };
+  clearTtsHighlight();
   passageSpeaking = true;
   updateReadAloudButton();
   speechSynthesis.speak(u);
@@ -2007,6 +2029,7 @@ async function boot() {
     $('#boot').remove();
     $('#app').classList.remove('is-loading');
     $('#app').removeAttribute('aria-busy');
+    document.querySelector('.shell').classList.remove('is-loading');
   } catch (err) {
     $('#boot').innerHTML = '<p style="color:var(--seal)">' + esc(err.message || String(err)) + '</p>';
   }
