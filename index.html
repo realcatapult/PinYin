@@ -775,6 +775,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             </div>
           </div>
           <button class="btn btn-quiet read-aloud" id="read-aloud" data-act="read-aloud" hidden aria-label="Read passage aloud"></button>
+          <div class="ctl tts-control" hidden>
+            <label class="lbl" for="tts-voice">Voice</label>
+            <select class="pick" id="tts-voice" aria-label="Speech voice"></select>
+          </div>
+          <div class="ctl tts-control" hidden>
+            <label class="lbl" for="tts-rate">Speed</label>
+            <select class="pick" id="tts-rate" aria-label="Speech speed">
+              <option value="0.7">Slow</option>
+              <option value="0.85" selected>Normal</option>
+              <option value="1">Fast</option>
+            </select>
+          </div>
           <button class="btn btn-quiet" id="new-text" style="margin-left:auto">New text</button>
         </div>
       </div>
@@ -1068,7 +1080,7 @@ const K = { deck: 'pd.deck.v1', prefs: 'pd.prefs.v1', text: 'pd.text.v1' };
 
 const prefs = Object.assign({
   ann: 'all', read: 'marks', hz: 30, chars: 'typed', theme: 'auto',
-  peekKey: 'KeyP', peekOn: true
+  peekKey: 'KeyP', peekOn: true, ttsVoice: '', ttsRate: 0.85
 }, store.get(K.prefs, {}));
 if (prefs.peekKey === 'Space') prefs.peekKey = 'KeyP';
 const savePrefs = () => store.set(K.prefs, prefs);
@@ -1589,20 +1601,31 @@ function grade(g) {
 /* ---------------- speech ---------------- */
 
 let voice = null;
+let ttsOffset = 0;
+let ttsTimer = 0;
+let ttsBoundarySeen = false;
 function pickVoice() {
   if (!window.speechSynthesis) return;
   const vs = speechSynthesis.getVoices();
-  voice = vs.find(v => /^zh[-_]CN/i.test(v.lang)) || vs.find(v => /^zh/i.test(v.lang)) || null;
+  voice = vs.find(v => v.name === prefs.ttsVoice) || vs.find(v => /^zh[-_]CN/i.test(v.lang)) || vs.find(v => /^zh/i.test(v.lang)) || null;
+  const select = $('#tts-voice');
+  if (select) {
+    const zhVoices = vs.filter(v => /^zh/i.test(v.lang));
+    select.innerHTML = zhVoices.map(v => '<option value="' + esc(v.name) + '">' + esc(v.name) + '</option>').join('');
+    if (voice && zhVoices.some(v => v.name === voice.name)) select.value = voice.name;
+  }
 }
 if (window.speechSynthesis) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 function say(text) {
   if (!window.speechSynthesis) return;
   speechSynthesis.cancel();
   passageSpeaking = false;
+  ttsOffset = 0;
+  cancelAnimationFrame(ttsTimer);
   clearTtsHighlight();
   updateReadAloudButton();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN'; u.rate = 0.85;
+  u.lang = 'zh-CN'; u.rate = prefs.ttsRate;
   if (voice) u.voice = voice;
   speechSynthesis.speak(u);
 }
@@ -1620,12 +1643,25 @@ function highlightTtsAt(charIndex) {
   });
   $$('.w.tts-active').forEach(word => word.classList.toggle('tts-active', word === current));
 }
+function startTtsFallback(text, startOffset) {
+  clearTimeout(ttsTimer);
+  const started = performance.now();
+  const charsPerSecond = 4.6 * prefs.ttsRate;
+  const tick = () => {
+    if (!passageSpeaking || ttsBoundarySeen) return;
+    ttsOffset = Math.min(text.length, startOffset + Math.floor((performance.now() - started) / 1000 * charsPerSecond));
+    highlightTtsAt(ttsOffset);
+    if (ttsOffset < text.length) ttsTimer = requestAnimationFrame(tick);
+  };
+  ttsTimer = requestAnimationFrame(tick);
+}
 function updateReadAloudButton() {
   const button = $('#read-aloud');
   if (!button) return;
   const active = passageSpeaking;
-  button.innerHTML = icon(active ? 'stop' : 'sound') + (active ? 'Stop' : 'Read aloud');
-  button.setAttribute('aria-label', active ? 'Stop reading aloud' : 'Read passage aloud');
+  const resumable = !active && ttsOffset > 0 && ttsOffset < S.text.length;
+  button.innerHTML = icon(active ? 'stop' : 'sound') + (active ? 'Stop' : resumable ? 'Resume' : 'Read aloud');
+  button.setAttribute('aria-label', active ? 'Stop reading aloud' : resumable ? 'Resume reading aloud' : 'Read passage aloud');
   button.setAttribute('aria-pressed', String(active));
 }
 function readPassageAloud() {
@@ -1633,24 +1669,36 @@ function readPassageAloud() {
   if (passageSpeaking) {
     passageSpeaking = false;
     speechSynthesis.cancel();
+    cancelAnimationFrame(ttsTimer);
     clearTtsHighlight();
     updateReadAloudButton();
     return;
   }
   speechSynthesis.cancel();
   const spokenText = S.text.replace(/\r\n?/g, '\n');
-  const u = new SpeechSynthesisUtterance(spokenText);
-  u.lang = 'zh-CN'; u.rate = 0.85;
+  if (ttsOffset >= spokenText.length) ttsOffset = 0;
+  const startOffset = ttsOffset;
+  const u = new SpeechSynthesisUtterance(spokenText.slice(startOffset));
+  u.lang = 'zh-CN'; u.rate = prefs.ttsRate;
   if (voice) u.voice = voice;
-  u.onboundary = e => highlightTtsAt(e.charIndex);
+  ttsBoundarySeen = false;
+  u.onboundary = e => {
+    ttsBoundarySeen = true;
+    cancelAnimationFrame(ttsTimer);
+    ttsOffset = Math.min(spokenText.length, startOffset + e.charIndex);
+    highlightTtsAt(ttsOffset);
+  };
   u.onend = u.onerror = () => {
     passageSpeaking = false;
+    ttsOffset = 0;
+    cancelAnimationFrame(ttsTimer);
     clearTtsHighlight();
     updateReadAloudButton();
   };
   clearTtsHighlight();
   passageSpeaking = true;
   updateReadAloudButton();
+  startTtsFallback(spokenText, startOffset);
   speechSynthesis.speak(u);
 }
 
@@ -1873,6 +1921,14 @@ function wire() {
     if (!CJK.test(v)) { toast('No Chinese characters found in that text'); return; }
     setText(v);
   });
+  $('#tts-voice').addEventListener('change', e => {
+    prefs.ttsVoice = e.target.value;
+    pickVoice(); savePrefs();
+  });
+  $('#tts-rate').value = String(prefs.ttsRate);
+  $('#tts-rate').addEventListener('change', e => {
+    prefs.ttsRate = +e.target.value; savePrefs();
+  });
   $('#paste-box').addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('#annotate').click(); }
   });
@@ -2011,6 +2067,9 @@ async function boot() {
   $$('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon) + el.textContent);
   if (window.speechSynthesis) {
     $('#read-aloud').hidden = false;
+    $$('.tts-control').forEach(el => { el.hidden = false; });
+    $('#tts-rate').value = String(prefs.ttsRate);
+    pickVoice();
     updateReadAloudButton();
   }
   wire();
